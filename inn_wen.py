@@ -35,6 +35,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 service = Service(service_args=[""]) #--verbose"])
 driver = webdriver.Edge(service=service, options=options)
+# driver.maximize_window()
 
 # Open page
 driver.get("https://service.vac.gov.tw/vac/index.asp")
@@ -80,25 +81,41 @@ WebDriverWait(driver, 20).until(
 
 # left_bar = driver.find_elements(By.TAG_NAME, "frame")[1]
 left_bar = driver.find_element(By.XPATH, "//frame[@title='leftbar']")
-print(left_bar.get_attribute('title'), "Loaded")
 driver.switch_to.frame(left_bar)
+# print(left_bar.get_attribute('title'), "Loaded")
+
+# WebDriverWait(driver, 10).until(
+#     EC.presence_of_all_elements_located((By.XPATH, "//a[@href='/LinkToODMS.asp')]"))
+# )
+
+element = driver.find_element(By.XPATH, "//a[contains(text(), '文檔資訊入口網')]")
 # element = driver.find_element(By.XPATH, "//*[contains(text(), '文檔資訊入口')]")
-element = driver.find_element(By.XPATH, "//a[text='文檔資訊入口')]")
+# element = driver.find_element(By.XPATH, "//a[@href='/LinkToODMS.asp')]")
 # element = driver.find_element(By.XPATH, "//*[@id='itemTextLink2']") # 文黨資訊入口
-print(element.get_attribute('text'), "Loaded")
-WebDriverWait(driver, 100).until(EC.element_to_be_clickable(element))
+# print(element.get_attribute('text'), "Loaded")
+print("文檔資訊入口網 Loaded")
+WebDriverWait(driver, 10).until(EC.element_to_be_clickable(element))
 element.click()
 
 # Close download tab
-time.sleep(1)
+time.sleep(1.5)
+temp = None
 for window in driver.window_handles:
     driver.switch_to.window(window)
-    if driver.title != "國軍退除役官兵輔導委員會文檔資訊入口網 V1.0":
+    if "國軍退除役官兵輔導委員會文檔資訊入口網" not in driver.title:
         driver.close()
-    else: print("switch to 國軍退除役官兵輔導委員會文檔資訊入口網 V1.0")
-time.sleep(1)
-print(driver.window_handles[0])
-driver.switch_to.window(driver.window_handles[0])
+    else:
+        # driver.switch_to.window(window)
+        temp = window
+        print("found 國軍退除役官兵輔導委員會文檔資訊入口網 V1.0")
+        break
+driver.switch_to.window(temp)
+
+# time.sleep(0.5)
+# print(driver.window_handles[0])
+# time.sleep(0.5)
+# driver.switch_to.window(driver.window_handles[0])
+# driver.switch_to.window(window)
 
 # 文黨資訊入口網左側選單的frame
 # frame = filter(lambda e: e.get_attribute('title')=='檔管狀態樹', driver.find_elements(By.TAG_NAME, "frame"))
@@ -115,8 +132,9 @@ element.click()
 #   中間: 主頁面資料
 s = driver.page_source # same somehow needed
 def build_frames(title):
-    _frame = filter(lambda e: e.get_attribute('title') == title, driver.find_elements(By.TAG_NAME, "frame"))
-    _frame = list(_frame)[0]
+    # _frame = filter(lambda e: e.get_attribute('title') == title, driver.find_elements(By.TAG_NAME, "frame"))
+    # _frame = list(_frame)[0]
+    _frame = driver.find_element(By.XPATH, ".//frame[@title='{}']".format(title))
     return _frame
 
 paper_manage_system_titles = ["主頁面資料", "功能組織樹"]
@@ -127,13 +145,15 @@ driver.switch_to.frame(paper_manage_system_frames["功能組織樹"])
 element = driver.find_elements(By.XPATH, "//*[contains(text(), '待簽收')]")[0]
 # element = driver.find_elements(By.XPATH, "//*[contains(text(), '承辦待處理')]")[0]
 element.click()
+print("load 代簽收 | 承辦代處理")
 
 # 開始印文!
 driver.switch_to.default_content()
 driver.switch_to.frame(paper_manage_system_frames["主頁面資料"])
+print("load 主頁面資料")
 rows = driver.find_elements(By.XPATH, "//tr[starts-with(@id, 'layer')]")
 
-max_num_data = 5
+max_num_data = 10
 num_data = 0
 
 for row in rows:
@@ -172,22 +192,36 @@ for row in rows:
         print(os.path.join(download_dir, filename))
         if not os.path.isfile(os.path.join(download_dir, filename)):
             hover.perform()
-            # time.sleep(1)
-            WebDriverWait(driver, 100).until(EC.element_to_be_clickable(pdf_element))
+            try:
+                WebDriverWait(driver, 10).until(EC.element_to_be_clickable(pdf_element))
+            except:
+                hover.perform()
+                time.sleep(1)
+
             pdf_element.click()
         else:
             print(f"{filename} already exist")
 
     try:
-        checkbox_element = row.find_element(By.XPATH, ".//input[@type='checkbox']")
-        checkbox_element.click()
+        row.find_element(By.XPATH, ".//input[@type='checkbox']").click()
+        print("checkbox clicked")
     except:
         print(f"fail to click checkbox {agent_elements["LblComesNum"].text}")
 
     time.sleep(0.1)
 
-time.sleep(3)
+time.sleep(2)
 from pdf_handle import handle
 handle(download_dir)
 
 driver.get(os.path.join(download_dir, "final.pdf"))
+
+for window in driver.window_handles:
+    driver.switch_to.window(window)
+    if driver.title.endswith('.pdf'):
+        driver.close()
+        driver.switch_to.frame(window)
+        break
+
+driver.execute_script("window.print()")
+input("Done press any to terminate")
